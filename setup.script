@@ -1,0 +1,20 @@
+#! /bin/bash
+
+if [ $GIT_USE_SSH ]; then
+    PREFIX="git@github.com:raph-amiard"
+else
+    PREFIX="https://github.com/raph-amiard"
+fi
+
+git clone $PREFIX/ada-nanovg.git
+cd ada-nanovg
+./setup.sh
+cd ..
+
+# Setup ada synth lib and ada soundio
+git clone $PREFIX/ada-synth-lib.git
+cd ada-synth-lib
+git clone $PREFIX/ada-soundio
+cd ada-soundio
+./build.script
+cd ../..
