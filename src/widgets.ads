@@ -11,8 +11,10 @@ with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
 package Widgets is
 
+   subtype Coord is Interfaces.C.double;
+
    type Base_Widget_Type is abstract tagged record
-      X, Y, Width, Height : Interfaces.C.double;
+      X, Y, Width, Height : Coord;
    end record;
 
    -----------------
@@ -52,6 +54,52 @@ package Widgets is
    procedure Draw
      (Self : access Widget_Window; Ctx : access NVG_Context);
 
+   ----------------------
+   -- Container_Widget --
+   ----------------------
+
+   type Container_Widget is new Base_Widget_Type with record
+      Widgets : Widget_Vectors.Vector;
+      BG_Color  : NVG_Color;
+   end record;
+
+   overriding procedure Draw
+     (Self : access Container_Widget; Ctx : access NVG_Context);
+
+   overriding procedure Mouse_Button_Changed
+     (Self    : not null access Container_Widget;
+      X, Y    : Input.Mouse.Coordinate;
+      Button  : Input.Mouse.Button;
+      State   : Input.Button_State;
+      Mods    : Input.Keys.Modifiers);
+
+   --------------------------------
+   -- Vertical_Stacked_Container --
+   --------------------------------
+
+   type Vertical_Stacked_Container is new Container_Widget with record
+      Current_Y : Coord;
+      Margin    : Coord;
+   end record;
+
+   procedure Add_Widget
+     (Self : access Vertical_Stacked_Container; W : Base_Widget);
+
+   function Create
+     (X, Y, Width, Margin : Coord;
+      BG_Color            : NVG_Color := No_Color)
+      return access Vertical_Stacked_Container
+   is
+     (new Vertical_Stacked_Container'
+        (X         => X,
+         Y         => Y,
+         Width     => Width,
+         Height    => Margin,
+         Current_Y => Y,
+         Margin    => Margin,
+         Widgets   => Widget_Vectors.Empty_Vector,
+         BG_Color  => BG_Color));
+
    ---------------------
    -- RB_Track_Widget --
    ---------------------
@@ -75,5 +123,29 @@ package Widgets is
      (S : access Simple_Sequencer;
       Name : String;
       X, Y, Width, Height : Interfaces.C.double) return access RB_Track_Widget;
+
+   -------------------------
+   -- RB_Play_Stop_Widget --
+   -------------------------
+
+   type Play_Stop_State is (Play, Stop);
+
+   type RB_Play_Stop_Widget is new Base_Widget_Type with record
+      Margin : Coord;
+      Button_W, Button_H, SB_X, PB_X, B_Y : Float;
+      State : Play_Stop_State := Stop;
+   end record;
+
+   function Create_Play_Stop (X, Y : Coord) return access RB_Play_Stop_Widget;
+
+   overriding procedure Draw
+     (Self : access RB_Play_Stop_Widget; Ctx : access NVG_Context);
+
+   overriding procedure Mouse_Button_Changed
+     (Self    : not null access RB_Play_Stop_Widget;
+      X, Y    : Input.Mouse.Coordinate;
+      Button  : Input.Mouse.Button;
+      State   : Input.Button_State;
+      Mods    : Input.Keys.Modifiers);
 
 end Widgets;

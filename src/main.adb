@@ -11,7 +11,6 @@ with Soundio_Output; use Soundio_Output;
 with Glfw.Windows;         use Glfw.Windows;
 with Glfw.Windows.Context; use Glfw.Windows.Context;
 with Ada_NanoVG;           use Ada_NanoVG;
-with Main_Support;         use Main_Support;
 with Glfw.Input;
 with GL.Buffers;           use GL.Buffers;
 with Glfw.Input.Mouse;
@@ -20,11 +19,12 @@ with GL.Blending;          use GL.Blending;
 with GL.Window;
 with GL.Types;             use GL.Types;
 with Glfw.Windows.Hints;
-with Glfw.Errors;
 with Widgets; use Widgets;
 with Ada.Real_Time;
-with Config; use Config;
+with Config;
 with Glfw.Monitors; use Glfw.Monitors;
+with Glfw.Errors;
+with Main_Support; use Main_Support;
 
 procedure Main is
 
@@ -41,8 +41,9 @@ procedure Main is
 
    Kick_Seq : constant access Simple_Sequencer :=
      Create_Sequencer
-       (16, BPM, 1,
-        (K, o, o, K, o, o, K, o, o, o, B, o, o, o, o, o));
+       (16, BPM, 2,
+        (K, o, o, K, o, o, K, o, o, o, B, o, o, o, o, o,
+         K, o, o, K, o, o, K, o, o, o, B, o, o, o, o, o));
 
    Kick_Source : constant Note_Generator_Access :=
      Note_Generator_Access (Kick_Seq);
@@ -67,12 +68,10 @@ procedure Main is
 
    Snare_Seq : constant access Simple_Sequencer :=
      Create_Sequencer
-       (Nb_Steps => 16, BPM => BPM, Measures => 1,
+       (Nb_Steps => 16, BPM => BPM, Measures => 2,
         Notes    =>
-          (o, o, o, o, Z, o, o, o, o, o, o, o, K, o, o, o));
---             o, o, o, o, K, o, o, o, o, o, o, o, B, o, K, K,
---             o, o, o, o, Z, o, o, o, o, o, o, o, K, o, o, o,
---             o, o, o, o, K, o, o, K, o, o, Z, o, B, o, Z, o));
+          (o, o, o, o, Z, o, o, o, o, o, o, o, K, o, o, o,
+           o, o, o, o, K, o, o, o, o, o, o, o, B, o, K, K));
 
    Snare_Source : constant Note_Generator_Access :=
      Note_Generator_Access (Snare_Seq);
@@ -94,8 +93,9 @@ procedure Main is
 
    Hat_Seq    : constant access Simple_Sequencer :=
      Create_Sequencer
-       (16, BPM,
-        Notes => (K, o, K, K, K, o, K, K, K, o, K, K, K, o, K, K));
+       (16, BPM, 2,
+        Notes => (K, o, K, K, K, o, K, K, K, o, K, K, K, o, K, K,
+                  K, o, K, K, K, o, K, K, K, o, K, K, K, o, K, K));
 
    Hat_Source : constant Note_Generator_Access :=
      Note_Generator_Access (Hat_Seq);
@@ -105,6 +105,7 @@ procedure Main is
         1 => (Create_Noise, 0.5)
        ), Env => Create_ADSR (0, 20, 0, 0.0, Hat_Source));
 
+   pragma Warnings (Off, "referenced");
    SNL : constant Sample_Period := 4000;
    S1  : constant Sequencer_Note := ((C, 4), SNL);
    S2  : constant Sequencer_Note := ((F, 4), SNL);
@@ -147,7 +148,7 @@ procedure Main is
                (Level  => 500.0,
                 Source => Create_ADSR (10, 150, 200, 0.005, Synth_Source),
                 others => <>)),
-           0.8), 1.00001, 1.5);
+           0.2), 1.00001, 1.5);
 
    Main_Mixer : constant access Mixer :=
      Create_Mixer ((
@@ -186,8 +187,11 @@ procedure Main is
    pragma Unreferenced (New_Time);
    Elapsed_Time        : Time_Span;
    pragma Warnings (Off);
-   Mon_W, Mon_H        : Interfaces.C.int;
 
+   Play_Stop           : access RB_Play_Stop_Widget;
+
+   Monitor_Index : Positive := 1;
+   Mon_W, Mon_H  : Interfaces.C.int;
 begin
 
    -----------------------
@@ -204,39 +208,54 @@ begin
    Out_Stream.Format := Format_Float32NE;
    Out_Stream.Write_Callback := Soundio_Output.Write_Callback'Access;
 
-   -----------------------
-   -- NANOVG INIT PART --
-   -----------------------
-
    Glfw.Init;
+
    declare
-      VM : Video_Mode_List := Primary_Monitor.Video_Modes;
+      VM : Video_Mode_List := Monitors (Monitor_Index).Video_Modes;
    begin
-      Mon_W := VM (1).Width;
-      Mon_H := VM (1).Height;
+      Mon_W := VM (VM'Last).Width;
+      Mon_H := VM (VM'Last).Height;
    end;
 
-   Glfw.Errors.Set_Callback (Error_Callback'Access);
+   -----------------
+   -- TRACKS INIT --
+   -----------------
 
-   W.Widgets.Append
-     (Widgets.Create
-       (Snare_Seq, "Snare", 0.0, 0.0, Interfaces.C.double (Mon_W), 50.0));
+   declare
+      VSC : access Vertical_Stacked_Container :=
+        Create (10.0, 100.0, Coord (Mon_W) - 20.0, 10.0,
+                BG_Color => RGBA (0.2, 0.2, 0.2, 1.0));
+   begin
+      Play_Stop := Create_Play_Stop (Coord (Mon_W) / 2.0, 0.0);
 
-   W.Widgets.Append
-     (Widgets.Create
-       (Hat_Seq, "Hat", 0.0, 50.0, Interfaces.C.double (Mon_W), 50.0));
+      W.Widgets.Append (Play_Stop);
 
-   W.Widgets.Append
-     (Widgets.Create
-       (Kick_Seq, "Kick", 0.0, 100.0, Interfaces.C.double (Mon_W), 50.0));
+      W.Widgets.Append (VSC);
+      VSC.Add_Widget
+        (Widgets.Create
+           (Snare_Seq, "Snare", 0.0, 0.0, 0.0, 50.0));
+
+      VSC.Add_Widget
+        (Widgets.Create
+           (Hat_Seq, "Hat", 0.0, 0.0, 0.0, 50.0));
+
+      VSC.Add_Widget
+        (Widgets.Create
+           (Kick_Seq, "Kick", 0.0, 0.0, 0.0, 50.0));
+
+      VSC.Add_Widget
+        (Widgets.Create
+           (Synth_Seq, "Synth", 0.0, 0.0, 0.0, 50.0));
+   end;
 
    Hints.Set_Client_API (OpenGL_ES);
    Hints.Set_Minimum_OpenGL_Version (2, 0);
 
+   Glfw.Errors.Set_Callback (Main_Support.Error_Callback'Access);
+
    Init (W'Access,
          Glfw.Size (Mon_W), Glfw.Size (Mon_H),
-         "NanoVG_Test", Primary_Monitor);
-
+         "NanoVG_Test", Monitors (Monitor_Index));
    Make_Current (W'Access);
 
    Ctx := Create_GLES2_Context
@@ -250,7 +269,7 @@ begin
 
    --  Start sound output
 
-   for Dummy in 0 .. 20 loop
+   for Dummy in 0 .. 10 loop
       Write_Samples (Out_Stream);
    end loop;
    Current_Time := Clock;
@@ -265,7 +284,7 @@ begin
       W.Get_Cursor_Pos (MX, MY);
 
       GL.Window.Set_Viewport (0, 0, Size (FB_Width), Size (FB_Height));
-      Set_Color_Clear_Value ((0.0, 0.0, 0.0, 0.0));
+      Set_Color_Clear_Value ((0.13, 0.13, 0.13, 1.0));
       Clear ((Stencil => True, Color => True, Depth => True, others => False));
 
       Enable (GL.Toggles.Blend);
@@ -283,6 +302,12 @@ begin
       Swap_Buffers (W'Access);
       Glfw.Input.Poll_Events;
 
+      if Play_Stop.State = Play then
+         Play (Out_Stream);
+      else
+         Stop (Out_Stream);
+      end if;
+
       Elapsed_Time := Clock - Current_Time;
       Current_Time := Clock;
 
@@ -292,8 +317,9 @@ begin
       begin
          Write_Samples
            (Out_Stream,
-            Natural (Duration (SAMPLE_RATE) * To_Duration (Elapsed_Time))
-            + Compensate_Samples);
+            Natural (Duration (Config.SAMPLE_RATE)
+              * To_Duration (Elapsed_Time))
+              + Compensate_Samples);
       end;
 
       delay 0.01;
