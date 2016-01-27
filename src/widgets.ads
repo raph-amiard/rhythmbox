@@ -1,20 +1,17 @@
 with Command; use Command;
-with Ada_NanoVG; use Ada_NanoVG;
 with Ada.Containers.Vectors;
-with Main_Support; use Main_Support;
-with Glfw.Input;
-with Glfw.Input.Mouse;
-with Glfw.Input.Keys;
-use Glfw;
 with Interfaces.C;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
+with Utils;
+with Ada_NanoVG; use Ada_NanoVG;
 
 package Widgets is
 
-   subtype Coord is Interfaces.C.double;
+   No_Color : constant NVG_Color := RGBA (0, 0, 0, 0);
+   GUI_Sample_Nb : Utils.Sample_Period := 0;
 
    type Base_Widget_Type is abstract tagged record
-      X, Y, Width, Height : Coord;
+      X, Y, Width, Height : Float;
    end record;
 
    -----------------
@@ -23,14 +20,9 @@ package Widgets is
 
    type Base_Widget is access all Base_Widget_Type'Class;
 
-   procedure Mouse_Click (Self : access Base_Widget; X, Y : Natural) is null;
-
-   procedure Mouse_Button_Changed
+   procedure Mouse_Clicked
      (Self    : not null access Base_Widget_Type;
-      X, Y    : Input.Mouse.Coordinate;
-      Button  : Input.Mouse.Button;
-      State   : Input.Button_State;
-      Mods    : Input.Keys.Modifiers) is null;
+      X, Y    : Float) is null;
 
    procedure Draw
      (Self : access Base_Widget_Type; Ctx : access NVG_Context) is abstract;
@@ -41,18 +33,15 @@ package Widgets is
 
    package Widget_Vectors is new Ada.Containers.Vectors (Natural, Base_Widget);
 
-   type Widget_Window is new Simple_Window with record
+   type Widget_Window is record
       Widgets : Widget_Vectors.Vector;
    end record;
 
-   overriding procedure Mouse_Button_Changed
-     (Self   : not null access Widget_Window;
-      Button : Input.Mouse.Button;
-      State  : Input.Button_State;
-      Mods   : Input.Keys.Modifiers);
+   procedure Mouse_Clicked
+     (Self : not null access Widget_Window; X, Y : Float);
 
    procedure Draw
-     (Self : access Widget_Window; Ctx : access NVG_Context);
+     (Self : in out Widget_Window; Ctx : access NVG_Context);
 
    ----------------------
    -- Container_Widget --
@@ -66,27 +55,24 @@ package Widgets is
    overriding procedure Draw
      (Self : access Container_Widget; Ctx : access NVG_Context);
 
-   overriding procedure Mouse_Button_Changed
+   overriding procedure Mouse_Clicked
      (Self    : not null access Container_Widget;
-      X, Y    : Input.Mouse.Coordinate;
-      Button  : Input.Mouse.Button;
-      State   : Input.Button_State;
-      Mods    : Input.Keys.Modifiers);
+      X, Y    : Float);
 
    --------------------------------
    -- Vertical_Stacked_Container --
    --------------------------------
 
    type Vertical_Stacked_Container is new Container_Widget with record
-      Current_Y : Coord;
-      Margin    : Coord;
+      Current_Y : Float;
+      Margin    : Float;
    end record;
 
    procedure Add_Widget
      (Self : access Vertical_Stacked_Container; W : Base_Widget);
 
    function Create
-     (X, Y, Width, Margin : Coord;
+     (X, Y, Width, Margin : Float;
       BG_Color            : NVG_Color := No_Color)
       return access Vertical_Stacked_Container
    is
@@ -112,17 +98,14 @@ package Widgets is
    overriding procedure Draw
      (Self : access RB_Track_Widget; Ctx : access NVG_Context);
 
-   overriding procedure Mouse_Button_Changed
-     (Self    : not null access RB_Track_Widget;
-      X, Y    : Input.Mouse.Coordinate;
-      Button  : Input.Mouse.Button;
-      State   : Input.Button_State;
-      Mods    : Input.Keys.Modifiers);
+   overriding procedure Mouse_Clicked
+     (Self : not null access RB_Track_Widget;
+      X, Y : Float);
 
    function Create
      (S : access Simple_Sequencer;
       Name : String;
-      X, Y, Width, Height : Interfaces.C.double) return access RB_Track_Widget;
+      X, Y, Width, Height : Float) return access RB_Track_Widget;
 
    -------------------------
    -- RB_Play_Stop_Widget --
@@ -131,21 +114,18 @@ package Widgets is
    type Play_Stop_State is (Play, Stop);
 
    type RB_Play_Stop_Widget is new Base_Widget_Type with record
-      Margin : Coord;
+      Margin : Float;
       Button_W, Button_H, SB_X, PB_X, B_Y : Float;
       State : Play_Stop_State := Stop;
    end record;
 
-   function Create_Play_Stop (X, Y : Coord) return access RB_Play_Stop_Widget;
+   function Create_Play_Stop (X, Y : Float) return access RB_Play_Stop_Widget;
 
    overriding procedure Draw
      (Self : access RB_Play_Stop_Widget; Ctx : access NVG_Context);
 
-   overriding procedure Mouse_Button_Changed
+   overriding procedure Mouse_Clicked
      (Self    : not null access RB_Play_Stop_Widget;
-      X, Y    : Input.Mouse.Coordinate;
-      Button  : Input.Mouse.Button;
-      State   : Input.Button_State;
-      Mods    : Input.Keys.Modifiers);
+      X, Y    : Float);
 
 end Widgets;

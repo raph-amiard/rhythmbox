@@ -1,30 +1,23 @@
-with Command; use Command;
-with Utils; use Utils;
+with Command;              use Command;
+with Utils;                use Utils;
 with Sound_Gen_Interfaces; use Sound_Gen_Interfaces;
-with Effects; use Effects;
-with Waves; use Waves;
-with BLIT; use BLIT;
-with Soundio; use Soundio;
-with Interfaces.C; use Interfaces.C;
-with Soundio_Output; use Soundio_Output;
+with Effects;              use Effects;
+with Waves;                use Waves;
+with BLIT;                 use BLIT;
+with Soundio;              use Soundio;
+with Interfaces.C;         use Interfaces.C;
+with Soundio_Output;       use Soundio_Output;
+with Ada.Text_IO;          use Ada.Text_IO;
 
-with Glfw.Windows;         use Glfw.Windows;
-with Glfw.Windows.Context; use Glfw.Windows.Context;
+with Widgets;              use Widgets;
+
+--  with Timing;               use Timing;
+with Main_Support;         use Main_Support;
 with Ada_NanoVG;           use Ada_NanoVG;
-with Glfw.Input;
-with GL.Buffers;           use GL.Buffers;
-with Glfw.Input.Mouse;
-with GL.Toggles;           use GL.Toggles;
-with GL.Blending;          use GL.Blending;
-with GL.Window;
-with GL.Types;             use GL.Types;
-with Glfw.Windows.Hints;
-with Widgets; use Widgets;
-with Ada.Real_Time;
 with Config;
-with Glfw.Monitors; use Glfw.Monitors;
-with Glfw.Errors;
-with Main_Support; use Main_Support;
+with Ada.Real_Time;        use Ada.Real_Time;
+with Rythmbox_Config;      use Rythmbox_Config;
+with Rythmbox_Config_Support;      use Rythmbox_Config_Support;
 
 procedure Main is
 
@@ -41,9 +34,9 @@ procedure Main is
 
    Kick_Seq : constant access Simple_Sequencer :=
      Create_Sequencer
-       (16, BPM, 2,
-        (K, o, o, K, o, o, K, o, o, o, B, o, o, o, o, o,
-         K, o, o, K, o, o, K, o, o, o, B, o, o, o, o, o));
+       (16, BPM, 1,
+        (K, o, o, K, o, o, K, o, o, o, B, o, o, o, o, o));
+         --  K, o, o, K, o, o, K, o, o, o, B, o, o, o, o, o));
 
    Kick_Source : constant Note_Generator_Access :=
      Note_Generator_Access (Kick_Seq);
@@ -68,10 +61,9 @@ procedure Main is
 
    Snare_Seq : constant access Simple_Sequencer :=
      Create_Sequencer
-       (Nb_Steps => 16, BPM => BPM, Measures => 2,
+       (Nb_Steps => 16, BPM => BPM, Measures => 1,
         Notes    =>
-          (o, o, o, o, Z, o, o, o, o, o, o, o, K, o, o, o,
-           o, o, o, o, K, o, o, o, o, o, o, o, B, o, K, K));
+          (o, o, o, o, Z, o, o, o, o, o, o, o, K, o, o, o));
 
    Snare_Source : constant Note_Generator_Access :=
      Note_Generator_Access (Snare_Seq);
@@ -86,16 +78,15 @@ procedure Main is
                        new Attenuator'
                       (Level  => 300.0,
                        Source =>
-                         Create_ADSR (0, 200, 10000, 0.5, Snare_Source),
+                         Create_ADSR (0, 100, 10000, 0.1, Snare_Source),
                        others => <>))),
               0.1)
        ), Env => Create_ADSR (0, 100, 100, 0.2, Snare_Source));
 
    Hat_Seq    : constant access Simple_Sequencer :=
      Create_Sequencer
-       (16, BPM, 2,
-        Notes => (K, o, K, K, K, o, K, K, K, o, K, K, K, o, K, K,
-                  K, o, K, K, K, o, K, K, K, o, K, K, K, o, K, K));
+       (16, BPM, 1,
+        Notes => (K, o, K, K, K, o, K, K, K, o, K, K, K, o, K, K));
 
    Hat_Source : constant Note_Generator_Access :=
      Note_Generator_Access (Hat_Seq);
@@ -116,11 +107,8 @@ procedure Main is
 
    Synth_Seq : constant access Simple_Sequencer :=
      Create_Sequencer
-       (8, BPM, 4,
-        (S1, S1, S1, S1, S1, S2, S2, S2,
-         S3, S3, S3, S3, S3, S4, S4, S4,
-         S1, S1, S1, S1, S1, S2, S2, S2,
-         S5, S5, S5, S5, S5, S6, S6, S6));
+       (16, BPM, 1,
+        (o, o, o, o, o, o, o, o, o, o, o, o, o, o, o, o));
 
    Synth_Source : constant Note_Generator_Access :=
      Note_Generator_Access (Synth_Seq);
@@ -142,10 +130,10 @@ procedure Main is
               1 => (BLIT.Create_Saw
                     (Create_Pitch_Gen
                          (-17, Synth_Source)), 0.5)
-             )),
+             ), Env => Create_ADSR (0, 100, 1000, 0.3, Synth_Source)),
            Fixed (200.0,
              Modulator => new Attenuator'
-               (Level  => 500.0,
+               (Level  => 4500.0,
                 Source => Create_ADSR (10, 150, 200, 0.005, Synth_Source),
                 others => <>)),
            0.2), 1.00001, 1.5);
@@ -166,67 +154,62 @@ procedure Main is
    Default_Device_Index : Interfaces.C.int;
    Device               : access SoundIo_Device;
    Out_Stream           : access SoundIo_Out_Stream;
-   Dummy_Err            : SoundIo_Error;
+   Elapsed_Time         : Time_Span;
+   Current_Time         : Time;
 
-   ----------------------
-   -- NANOVG VARIABLES --
-   ----------------------
+   ------------------------
+   -- GRAPHICS VARIABLES --
+   ------------------------
 
    W                   : aliased Widgets.Widget_Window;
-   Ctx                 : access NVG_Context;
-   Width, Height       : Glfw.Size;
-   FB_Width, FB_Height : Glfw.Size;
-   MX, MY              : Glfw.Input.Mouse.Coordinate;
-
-   Ring_Buf            : constant FRB.Ring_Buffer := FRB.Create (2 ** 14);
-
-   use Ada.Real_Time;
-
-   Current_Time        : Time := Clock;
-   New_Time            : Time;
-   pragma Unreferenced (New_Time);
-   Elapsed_Time        : Time_Span;
-   pragma Warnings (Off);
+   Ring_Buf            : constant FRB.Ring_Buffer := FRB.Create (2 ** 15);
 
    Play_Stop           : access RB_Play_Stop_Widget;
+   Mon_W, Mon_H        : Natural;
+   Ctx                 : access NVG_Context;
 
-   Monitor_Index : Positive := 1;
-   Mon_W, Mon_H  : Interfaces.C.int;
+   procedure Mouse_Clicked_Callback (X, Y : Integer);
+   procedure Mouse_Clicked_Callback (X, Y : Integer) is
+   begin
+      Mouse_Clicked (W'Access, Float (X), Float (Y));
+   end Mouse_Clicked_Callback;
+
 begin
 
    -----------------------
    -- SOUNDIO INIT PART --
    -----------------------
 
-   Dummy_Err := Connect (IO);
+   Check_Error (Connect (IO));
    Flush_Events (IO);
    Default_Device_Index := Default_Output_Device_Index (IO);
    Device := Get_Output_Device (IO, Default_Device_Index);
    Out_Stream := Outstream_Create (Device);
-   Set_Ring_Buffer (Out_Stream, Ring_Buf, Main_Mixer);
+
+   if Audio_Mode = Mode_Ring_Buf then
+      Set_Ring_Buffer (Out_Stream, Ring_Buf, Main_Mixer);
+   else
+      Set_Generator (Out_Stream, Main_Mixer);
+   end if;
 
    Out_Stream.Format := Format_Float32NE;
    Out_Stream.Write_Callback := Soundio_Output.Write_Callback'Access;
 
-   Glfw.Init;
+   Put_Line (IO.current_backend'Img);
 
-   declare
-      VM : Video_Mode_List := Monitors (Monitor_Index).Video_Modes;
-   begin
-      Mon_W := VM (VM'Last).Width;
-      Mon_H := VM (VM'Last).Height;
-   end;
+   Ctx := Init (Mon_W, Mon_H, 800, 480);
+   Set_Mouse_Clicked_Callback (Mouse_Clicked_Callback'Unrestricted_Access);
 
    -----------------
    -- TRACKS INIT --
    -----------------
 
    declare
-      VSC : access Vertical_Stacked_Container :=
-        Create (10.0, 100.0, Coord (Mon_W) - 20.0, 10.0,
-                BG_Color => RGBA (0.2, 0.2, 0.2, 1.0));
+      VSC : constant access Vertical_Stacked_Container :=
+        Create (10.0, 100.0, Float (Mon_W) - 20.0, 10.0,
+                BG_Color => RGBA (51, 51, 51, 255));
    begin
-      Play_Stop := Create_Play_Stop (Coord (Mon_W) / 2.0, 0.0);
+      Play_Stop := Create_Play_Stop (Float (Mon_W) / 2.0, 0.0);
 
       W.Widgets.Append (Play_Stop);
 
@@ -248,81 +231,50 @@ begin
            (Synth_Seq, "Synth", 0.0, 0.0, 0.0, 50.0));
    end;
 
-   Hints.Set_Client_API (OpenGL_ES);
-   Hints.Set_Minimum_OpenGL_Version (2, 0);
-
-   Glfw.Errors.Set_Callback (Main_Support.Error_Callback'Access);
-
-   Init (W'Access,
-         Glfw.Size (Mon_W), Glfw.Size (Mon_H),
-         "NanoVG_Test", Monitors (Monitor_Index));
-   Make_Current (W'Access);
-
-   Ctx := Create_GLES2_Context
-     ((Antialias => True, Stencil_Strokes => True, Debug => True));
-
-   Set_Swap_Interval (0);
-   Glfw.Set_Time (0.0);
-
-   W.Enable_Callback (Callbacks.Key);
-   W.Enable_Callback (Callbacks.Mouse_Button);
-
    --  Start sound output
 
-   for Dummy in 0 .. 10 loop
-      Write_Samples (Out_Stream);
-   end loop;
-   Current_Time := Clock;
+   if Audio_Mode = Mode_Ring_Buf then
+      for Dummy in 0 .. 10 loop
+         Write_Samples (Out_Stream);
+      end loop;
+   end if;
 
-   Dummy_Err := Outstream_Open (Out_Stream);
-   Dummy_Err := Outstream_Start (Out_Stream);
+   Check_Error (Outstream_Open (Out_Stream));
+   Check_Error (Outstream_Start (Out_Stream));
 
-   while not W.Should_Close loop
-      W.Get_Size (Width, Height);
-      W.Get_Framebuffer_Size (FB_Width, FB_Height);
-
-      W.Get_Cursor_Pos (MX, MY);
-
-      GL.Window.Set_Viewport (0, 0, Size (FB_Width), Size (FB_Height));
-      Set_Color_Clear_Value ((0.13, 0.13, 0.13, 1.0));
-      Clear ((Stencil => True, Color => True, Depth => True, others => False));
-
-      Enable (GL.Toggles.Blend);
-      Set_Blend_Func (Src_Alpha, One_Minus_Src_Alpha);
-      Enable (GL.Toggles.Cull_Face);
-      Disable (GL.Toggles.Depth_Test);
-
-      Begin_Frame (Ctx, Width, Height, 1.0);
-      W.Draw (Ctx);
-
-      Restore (Ctx);
-      End_Frame (Ctx);
-
-      Enable (GL.Toggles.Depth_Test);
-      Swap_Buffers (W'Access);
-      Glfw.Input.Poll_Events;
-
+   Play_Stop.State := Stop;
+   while not Should_Exit loop
       if Play_Stop.State = Play then
          Play (Out_Stream);
       else
          Stop (Out_Stream);
       end if;
 
-      Elapsed_Time := Clock - Current_Time;
-      Current_Time := Clock;
+      Poll_Events;
+      Widgets.GUI_Sample_Nb := Sample_Nb;
+--        Time_Start;
+      Start_Frame;
 
-      declare
-         Compensate_Samples : Natural :=
-           (if Drift_Level > 0 then 100 else 0);
-      begin
-         Write_Samples
-           (Out_Stream,
-            Natural (Duration (Config.SAMPLE_RATE)
-              * To_Duration (Elapsed_Time))
-              + Compensate_Samples);
-      end;
+      Set_Background_Color (RGBA (50, 50, 50, 255));
+      Widgets.Draw (W, Ctx);
+      End_Frame;
+--        Time_End ("Drawing time : ");
 
-      delay 0.01;
+      if Audio_Mode = Mode_Ring_Buf then
+         Elapsed_Time := Clock - Current_Time;
+         Current_Time := Clock;
+         declare
+            Compensate_Samples : constant Natural :=
+              (if Drift_Level > 0 then 100 else 0);
+         begin
+            Write_Samples
+              (Out_Stream,
+               Natural (Duration (Config.SAMPLE_RATE)
+                 * To_Duration (Elapsed_Time))
+               + Compensate_Samples);
+         end;
+      end if;
+
    end loop;
 
    pragma Warnings (Off, "Unreachable");
