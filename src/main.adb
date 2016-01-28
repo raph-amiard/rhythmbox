@@ -35,7 +35,8 @@ procedure Main is
    Kick_Seq : constant access Simple_Sequencer :=
      Create_Sequencer
        (16, BPM, 1,
-        (K, o, o, K, o, o, K, o, o, o, B, o, o, o, o, o));
+        (K, o, o, K, o, o, K, o, o, o, B, o, o, o, o, o),
+       "Kick");
          --  K, o, o, K, o, o, K, o, o, o, B, o, o, o, o, o));
 
    Kick_Source : constant Note_Generator_Access :=
@@ -44,17 +45,18 @@ procedure Main is
    Kick : constant access Mixer :=
      Create_Mixer
        ((
+--          1 => (Create_Sine
+--                (Create_Pitch_Gen
+--                   (0, Kick_Source, Proc => LFO (6.0, 200.0))),
+--                0.1),
+
         1 => (Create_Sine
               (Create_Pitch_Gen
-                 (0, Kick_Source, Proc => LFO (6.0, 200.0))),
-              0.1),
-
-        2 => (Create_Sine (Create_Pitch_Gen
-              (-24, Kick_Source,
-                 Proc => new Attenuator'
-                   (Level  => 300.0,
-                    Source => Create_ADSR (0, 50, 10000, 0.1, Kick_Source),
-                    others => <>))),
+                 (-32, Kick_Source,
+                    Proc => new Attenuator'
+                      (Level  => 300.0,
+                       Source => Create_ADSR (0, 50, 10000, 0.1, Kick_Source),
+                       others => <>))),
 
               0.7)
        ), Env => Create_ADSR (10, 1000, 200, 0.2, Kick_Source));
@@ -63,7 +65,8 @@ procedure Main is
      Create_Sequencer
        (Nb_Steps => 16, BPM => BPM, Measures => 1,
         Notes    =>
-          (o, o, o, o, Z, o, o, o, o, o, o, o, K, o, o, o));
+          (o, o, o, o, Z, o, o, o, o, o, o, o, K, o, o, o),
+        Track_Name => "Snare");
 
    Snare_Source : constant Note_Generator_Access :=
      Note_Generator_Access (Snare_Seq);
@@ -86,15 +89,16 @@ procedure Main is
    Hat_Seq    : constant access Simple_Sequencer :=
      Create_Sequencer
        (16, BPM, 1,
-        Notes => (K, o, K, K, K, o, K, K, K, o, K, K, K, o, K, K));
+        Notes => (K, o, K, K, K, o, K, K, K, o, K, K, K, o, K, K),
+        Track_Name => "Hat");
 
    Hat_Source : constant Note_Generator_Access :=
      Note_Generator_Access (Hat_Seq);
+
    Hat        : constant access Mixer :=
      Create_Mixer
-       ((
-        1 => (Create_Noise, 0.5)
-       ), Env => Create_ADSR (0, 20, 0, 0.0, Hat_Source));
+       ((1 => (Create_Noise, 0.5)),
+        Env => Create_ADSR (0, 20, 0, 0.0, Hat_Source));
 
    pragma Warnings (Off, "referenced");
    SNL : constant Sample_Period := 4000;
@@ -108,10 +112,19 @@ procedure Main is
    Synth_Seq : constant access Simple_Sequencer :=
      Create_Sequencer
        (16, BPM, 1,
-        (o, o, o, o, o, o, o, o, o, o, o, o, o, o, o, o));
+        (o, o, o, o, o, o, o, o, o, o, o, o, o, o, o, o),
+       Track_Name => "Synth");
 
    Synth_Source : constant Note_Generator_Access :=
      Note_Generator_Access (Synth_Seq);
+
+   LPF_Cut_Freq : constant access Fixed_Gen :=
+     Fixed (200.0,
+            Name => "Cutoff",
+            Modulator => new Attenuator'
+              (Level  => 4500.0,
+               Source => Create_ADSR (10, 150, 200, 0.005, Synth_Source),
+               others => <>));
 
    Synth : constant access Disto :=
      Create_Dist
@@ -130,12 +143,8 @@ procedure Main is
               1 => (BLIT.Create_Saw
                     (Create_Pitch_Gen
                          (-17, Synth_Source)), 0.5)
-             ), Env => Create_ADSR (0, 100, 1000, 0.3, Synth_Source)),
-           Fixed (200.0,
-             Modulator => new Attenuator'
-               (Level  => 4500.0,
-                Source => Create_ADSR (10, 150, 200, 0.005, Synth_Source),
-                others => <>)),
+             ), Env => Create_ADSR (0, 100, 100, 0.0, Synth_Source)),
+           LPF_Cut_Freq,
            0.2), 1.00001, 1.5);
 
    Main_Mixer : constant access Mixer :=
@@ -155,26 +164,25 @@ procedure Main is
    Device               : access SoundIo_Device;
    Out_Stream           : access SoundIo_Out_Stream;
    Elapsed_Time         : Time_Span;
-   Current_Time         : Time;
+   Current_Time         : Time := Clock;
 
    ------------------------
    -- GRAPHICS VARIABLES --
    ------------------------
 
-   W                   : aliased Widgets.Widget_Window;
+   W                   : Container;
    Ring_Buf            : constant FRB.Ring_Buffer := FRB.Create (2 ** 15);
 
    Play_Stop           : access RB_Play_Stop_Widget;
    Mon_W, Mon_H        : Natural;
    Ctx                 : access NVG_Context;
 
-   procedure Mouse_Clicked_Callback (X, Y : Integer);
-   procedure Mouse_Clicked_Callback (X, Y : Integer) is
-   begin
-      Mouse_Clicked (W'Access, Float (X), Float (Y));
-   end Mouse_Clicked_Callback;
-
 begin
+
+   Synth.Compute_Params;
+   Hat.Compute_Params;
+   Kick.Compute_Params;
+   Snare.Compute_Params;
 
    -----------------------
    -- SOUNDIO INIT PART --
@@ -198,37 +206,31 @@ begin
    Put_Line (IO.current_backend'Img);
 
    Ctx := Init (Mon_W, Mon_H, 800, 480);
-   Set_Mouse_Clicked_Callback (Mouse_Clicked_Callback'Unrestricted_Access);
+
+   W := New_Container (0.0, 0.0, Float (Mon_W), Float (Mon_H));
+
+   Take_Mouse (Mouse_Listener (W));
 
    -----------------
    -- TRACKS INIT --
    -----------------
 
    declare
-      VSC : constant access Vertical_Stacked_Container :=
-        Create (10.0, 100.0, Float (Mon_W) - 20.0, 10.0,
-                BG_Color => RGBA (51, 51, 51, 255));
+      Main_Container : constant Container :=
+        New_Container (0.0, 100.0, Float (Mon_W), Float (Mon_H) - 100.0);
+
+      Sequencers_Group : constant access Seq_Group_Widget :=
+        Seq_Group
+          (10.0, 100.0, Float (Mon_W) - 20.0, 10.0,
+           Seq =>
+             ((Snare_Seq, Snare), (Hat_Seq, Hat),
+              (Kick_Seq, Kick),   (Synth_Seq, Synth)));
    begin
       Play_Stop := Create_Play_Stop (Float (Mon_W) / 2.0, 0.0);
-
       W.Widgets.Append (Play_Stop);
-
-      W.Widgets.Append (VSC);
-      VSC.Add_Widget
-        (Widgets.Create
-           (Snare_Seq, "Snare", 0.0, 0.0, 0.0, 50.0));
-
-      VSC.Add_Widget
-        (Widgets.Create
-           (Hat_Seq, "Hat", 0.0, 0.0, 0.0, 50.0));
-
-      VSC.Add_Widget
-        (Widgets.Create
-           (Kick_Seq, "Kick", 0.0, 0.0, 0.0, 50.0));
-
-      VSC.Add_Widget
-        (Widgets.Create
-           (Synth_Seq, "Synth", 0.0, 0.0, 0.0, 50.0));
+      W.Widgets.Append (Base_Widget (Main_Container));
+      Main_Container.Widgets.Append (Sequencers_Group);
+--        W.Widgets.Append (Pots_Group (Generator_Access (Kick), 10.0, 365.0));
    end;
 
    --  Start sound output
@@ -255,8 +257,8 @@ begin
 --        Time_Start;
       Start_Frame;
 
-      Set_Background_Color (RGBA (50, 50, 50, 255));
-      Widgets.Draw (W, Ctx);
+      Set_Background_Color (RGBA (20, 20, 20, 255));
+      W.Draw (Ctx);
       End_Frame;
 --        Time_End ("Drawing time : ");
 
@@ -277,7 +279,6 @@ begin
 
    end loop;
 
-   pragma Warnings (Off, "Unreachable");
    Outstream_Destroy (Out_Stream);
    Device_Unref (Device);
    Destroy (IO);
