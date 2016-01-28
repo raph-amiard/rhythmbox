@@ -149,7 +149,7 @@ package Widgets is
    is
      (new Vertical_Pot_Widget'(X             => X,
                                Y             => Y,
-                               Width         => 40.0,
+                               Width         => 50.0,
                                Height        => 100.0,
                                Min_Value     => G.Get_Min_Value (Val_Index),
                                Max_Value     => G.Get_Max_Value (Val_Index),

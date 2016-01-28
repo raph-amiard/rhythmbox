@@ -413,11 +413,11 @@ package body Widgets is
       Obj : constant access Pots_Group_Widget := new Pots_Group_Widget'
         (X          => X,
          Margin     => 5.0,
-         BG_Color   => <>,
+         BG_Color   => RGBA (100, 100, 100, 255),
          Current_X  => X,
          Y          => Y,
          Width      => 5.0,
-         Height     => 120.0,
+         Height     => 220.0,
          others => <>);
       Params : constant Generator_Array := G.Get_Params;
    begin
@@ -572,7 +572,7 @@ package body Widgets is
       P : constant access Pots_Group_Widget'Class :=
         Pots_Group (Self.Seq_Group.Sequencers (Self.Index).Instrument,
                     Self.Seq_Group.X + 40.0,
-                    Self.Seq_Group.Y + 40.0);
+                    Self.Seq_Group.Y + 10.0);
       B : constant access Back_To_Seq_Button'Class :=
         new Back_To_Seq_Button'(Seq_Group => Self.Seq_Group, others => <>);
    begin
