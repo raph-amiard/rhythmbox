@@ -397,7 +397,7 @@ package body Widgets is
          Set_Value (Self, Y);
       elsif Kind = Moved and then Self.Has_Mouse then
          Set_Value (Self, Y);
-      elsif Kind = Released then
+      elsif Kind = Released and then Self.Has_Mouse then
          Self.Has_Mouse := False;
          Return_Mouse (Mouse_Listener'(Self'Unrestricted_Access));
       end if;
@@ -551,7 +551,7 @@ package body Widgets is
          Take_Mouse (Mouse_Listener'(Self'Unrestricted_Access));
          Self.Has_Mouse := True;
          Self.Is_Active := True;
-      elsif Kind = Released then
+      elsif Kind = Released and then Self.Has_Mouse then
          Self.Has_Mouse := False;
          Return_Mouse (Mouse_Listener'(Self'Unrestricted_Access));
          Self.Is_Active := False;
