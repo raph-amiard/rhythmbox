@@ -27,14 +27,11 @@ procedure Main is
    BPM : constant := 120;
 
    o : constant Sequencer_Note := No_Seq_Note;
-   K : constant Sequencer_Note := (Note => (G, 3), Duration => 3000);
-   Z : constant Sequencer_Note := (Note => (G, 3), Duration => 5000);
-   B : constant Sequencer_Note := (Note => (G, 3), Duration => 8000);
 
    Kick_Seq : constant access Simple_Sequencer :=
      Create_Sequencer
        (16, BPM, 1,
-        (K, o, o, K, o, o, K, o, o, o, B, o, o, o, o, o),
+        (o, o, o, o, o, o, o, o, o, o, o, o, o, o, o, o),
        "Kick");
          --  K, o, o, K, o, o, K, o, o, o, B, o, o, o, o, o));
 
@@ -64,7 +61,7 @@ procedure Main is
      Create_Sequencer
        (Nb_Steps => 16, BPM => BPM, Measures => 1,
         Notes    =>
-          (o, o, o, o, Z, o, o, o, o, o, o, o, K, o, o, o),
+          (o, o, o, o, o, o, o, o, o, o, o, o, o, o, o, o),
         Track_Name => "Snare");
 
    Snare_Source : constant Note_Generator_Access :=
@@ -88,7 +85,7 @@ procedure Main is
    Hat_Seq    : constant access Simple_Sequencer :=
      Create_Sequencer
        (16, BPM, 1,
-        Notes => (o, o, K, o, o, o, K, o, o, o, K, o, o, o, K, K),
+        Notes => (o, o, o, o, o, o, o, o, o, o, o, o, o, o, o, o),
         Track_Name => "Hat");
 
    Hat_Source : constant Note_Generator_Access :=
