@@ -11,7 +11,6 @@ with Ada.Text_IO;          use Ada.Text_IO;
 
 with Widgets;              use Widgets;
 
---  with Timing;               use Timing;
 with Main_Support;         use Main_Support;
 with Ada_NanoVG;           use Ada_NanoVG;
 with Config;
@@ -89,7 +88,7 @@ procedure Main is
    Hat_Seq    : constant access Simple_Sequencer :=
      Create_Sequencer
        (16, BPM, 1,
-        Notes => (K, o, K, K, K, o, K, K, K, o, K, K, K, o, K, K),
+        Notes => (o, o, K, o, o, o, K, o, o, o, K, o, o, o, K, K),
         Track_Name => "Hat");
 
    Hat_Source : constant Note_Generator_Access :=
@@ -126,6 +125,20 @@ procedure Main is
                Source => Create_ADSR (10, 150, 200, 0.005, Synth_Source),
                others => <>));
 
+   Bass_Seq : constant access Simple_Sequencer :=
+     Create_Sequencer
+       (16, BPM, 1,
+        (o, o, o, o, o, o, o, o, o, o, o, o, o, o, o, o),
+        Track_Name => "Bass");
+
+   LPF_Cut_Freq_2 : constant access Fixed_Gen :=
+     Fixed (200.0,
+            Name      => "Cutoff",
+            Modulator => new Attenuator'
+              (Level  => 4500.0,
+               Source => Create_ADSR (10, 150, 200, 0.005, Bass_Seq),
+               others => <>));
+
    Synth : constant access Disto :=
      Create_Dist
        (Create_LP
@@ -147,13 +160,27 @@ procedure Main is
            LPF_Cut_Freq,
            0.2), 1.00001, 1.5);
 
+   Bass  : constant access Disto :=
+     Create_Dist
+       (Create_LP
+          (Create_Mixer
+             ((
+              2 => (BLIT.Create_Square
+                    (Create_Pitch_Gen
+                         (-36, Bass_Seq, Fixed (100.0))), 0.3),
+              1 => (BLIT.Create_Square
+                    (Create_Pitch_Gen
+                         (-36, Bass_Seq)), 0.5)
+             ), Env => Create_ADSR (0, 100, 100, 0.0, Bass_Seq)),
+           LPF_Cut_Freq_2,
+           0.2), 1.00001, 1.5);
+
    Main_Mixer : constant access Mixer :=
-     Create_Mixer ((
-                   (Kick, 0.5),
-                   (Snare, 0.7),
-                   (Hat, 0.6),
-                   (Synth, 0.45)
-                  ));
+     Create_Mixer (((Kick,    0.9),
+                    (Snare,   0.8),
+                    (Hat,     0.8),
+                    (Synth,   0.8),
+                    (Bass,    0.8)));
 
    -----------------------
    -- SOUNDIO VARIABLES --
@@ -183,6 +210,7 @@ begin
    Hat.Compute_Params;
    Kick.Compute_Params;
    Snare.Compute_Params;
+   Bass.Compute_Params;
 
    -----------------------
    -- SOUNDIO INIT PART --
@@ -224,7 +252,7 @@ begin
           (10.0, 100.0, Float (Mon_W) - 20.0, 10.0,
            Seq =>
              ((Snare_Seq, Snare), (Hat_Seq, Hat),
-              (Kick_Seq, Kick),   (Synth_Seq, Synth)));
+              (Kick_Seq, Kick),   (Synth_Seq, Synth), (Bass_Seq, Bass)));
    begin
       Play_Stop := Create_Play_Stop (Float (Mon_W) / 2.0, 0.0);
       W.Widgets.Append (Play_Stop);
@@ -267,7 +295,7 @@ begin
          Current_Time := Clock;
          declare
             Compensate_Samples : constant Natural :=
-              (if Drift_Level > 0 then 100 else 0);
+              (if Drift_Level > 0 then 500 else 0);
          begin
             Write_Samples
               (Out_Stream,
