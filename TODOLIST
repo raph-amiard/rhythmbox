@@ -1,0 +1,55 @@
+UI
+--
+
+* Make scrolling windows stop at boundaries.
+* Circle pots. DONE
+* Flow group for circle pots
+* Piano roll
+* Explicit param groups (one level of nesting)
+
+SOUND
+-----
+
+### Correct ADSR. DONE (I think)
+
+* Need to check the correct behavior under working software
+* Implement exp transfer for attack, decay and release
+* Implement plotter to verify correct behavior
+
+### Polyphony:
+
+#### Hard part 1: Generate the voices
+
+* Implement cloning of Generator trees ? Boring and difficult.
+* Better: Poly takes the constructor for the regular mono instrument, and calls
+  it as many times as needed to create the number of voices.
+* Plus side: Goes well with hard part 3.
+
+#### Hard part 2: Cloning should be able to have params that affect every clone.
+
+IDEA/
+
+* Hide every parameter behind the Poly generator.
+* The poly generator will have one parameter for each parameter in his original instrument.
+* When modified, it will modify the parameter for every voice at once.
+
+#### Hard part 3: Note generators should not trigger every voice at once.
+
+IDEA/ For this we need:
+* Instrument constructor for a monophonic instrument that'll take only one note source.
+* The poly constructor will take the instrument constructor, the note
+  generator, and call the instrument constructor with proxy note generators
+  that will do a ring dispatch of notes.
+
+* More filters (BP, HP, 4 poles).
+* Equalizer.
+* Reverb.
+* Make delay work again.
+* Sampler.
+* Logarithmic scale for ADSR and some parameters.
+
+ENGINE
+------
+
+* Serialize / Load & Save
+* Song mode
