@@ -7,16 +7,17 @@ with BLIT;                 use BLIT;
 with Soundio;              use Soundio;
 with Interfaces.C;         use Interfaces.C;
 with Soundio_Output;       use Soundio_Output;
-with Ada.Text_IO;          use Ada.Text_IO;
 
 with Widgets;              use Widgets;
 
 with Main_Support;         use Main_Support;
 with Ada_NanoVG;           use Ada_NanoVG;
 with Config;
-with Ada.Real_Time;        use Ada.Real_Time;
-with Rythmbox_Config;      use Rythmbox_Config;
-with Rythmbox_Config_Support;      use Rythmbox_Config_Support;
+with Ada.Real_Time;           use Ada.Real_Time;
+with Rythmbox_Config_Support; use Rythmbox_Config_Support;
+with Rythmbox_Utils;          use Rythmbox_Utils;
+with Sequencer;
+with Ada.Text_IO; use Ada.Text_IO;
 
 procedure Main is
 
@@ -105,14 +106,11 @@ procedure Main is
    S5  : constant Sequencer_Note := ((G, 4), SNL);
    S6  : constant Sequencer_Note := ((D_Sh, 4), SNL);
 
-   Synth_Seq : constant access Simple_Sequencer :=
-     Create_Sequencer
-       (16, BPM, 1,
-        (o, o, o, o, o, o, o, o, o, o, o, o, o, o, o, o),
-       Track_Name => "Synth");
+   Synth_Seq : constant access Sequencer.Sequencer
+     := Sequencer.Create (120, 1, 1, "Synth");
 
    Synth_Source : constant Note_Generator_Access :=
-     Note_Generator_Access (Synth_Seq);
+     Note_Generator_Access (Synth_Seq.Note_Generators (0));
 
    LPF_Cut_Freq : constant access Fixed_Gen :=
      Fixed (200.0,
@@ -120,7 +118,8 @@ procedure Main is
             Modulator => new Attenuator'
               (Level  => 4500.0,
                Source => Create_ADSR (10, 150, 200, 0.005, Synth_Source),
-               others => <>));
+               others => <>),
+            Param_Scale => Exp, Max => 20_000.0);
 
    Bass_Seq : constant access Simple_Sequencer :=
      Create_Sequencer
@@ -200,6 +199,7 @@ procedure Main is
    Play_Stop           : access RB_Play_Stop_Widget;
    Mon_W, Mon_H        : Natural;
    Ctx                 : access NVG_Context;
+   Audio_Mode          : Mode_T;
 
 begin
 
@@ -219,16 +219,26 @@ begin
    Device := Get_Output_Device (IO, Default_Device_Index);
    Out_Stream := Outstream_Create (Device);
 
-   if Audio_Mode = Mode_Ring_Buf then
+   Put_Line ("BACKEND = " & IO.Current_Backend'Image);
+   if IO.Current_Backend = Backend_PulseAudio then
+
+      --  If we're using the pulseaudio backend, we want to use a ring buffer
+      --  so that the crazy maximum sizes of PA buffers are not filled at once,
+      --  which would make for a latency of ~2secs in the application.
       Set_Ring_Buffer (Out_Stream, Ring_Buf, Main_Mixer);
+      Audio_Mode := Mode_Ring_Buf;
    else
+
+      --  In other cases, use the simple callback mode, since it is more
+      --  efficient in terms of ressources usage.
       Set_Generator (Out_Stream, Main_Mixer);
+      Audio_Mode := Mode_CB;
    end if;
 
    Out_Stream.Format := Format_Float32NE;
    Out_Stream.Write_Callback := Soundio_Output.Write_Callback'Access;
 
-   Put_Line (IO.current_backend'Img);
+   Debug ("Backend used : " & IO.Current_Backend'Img);
 
    Ctx := Init (Mon_W, Mon_H, 800, 480);
 
@@ -242,20 +252,34 @@ begin
 
    declare
       Main_Container : constant Container :=
-        New_Container (0.0, 100.0, Float (Mon_W), Float (Mon_H) - 100.0);
+        New_Container (0.0, 50.0, Float (Mon_W), Float (Mon_H) - 50.0,
+                       BG_Color => RGBA (55, 55, 55, 255));
 
       Sequencers_Group : constant access Seq_Group_Widget :=
         Seq_Group
-          (10.0, 100.0, Float (Mon_W) - 20.0, 10.0,
+          (0.0, 0.0, 0.0, Margin => 5.0,
+           Main_Container        => Main_Container,
            Seq =>
-             ((Snare_Seq, Snare), (Hat_Seq, Hat),
-              (Kick_Seq, Kick),   (Synth_Seq, Synth), (Bass_Seq, Bass)));
+             ((Snare_Seq, Snare),  (Hat_Seq,   Hat),
+              (Kick_Seq,  Kick),   (Synth_Seq, Synth),
+              (Bass_Seq, Bass)));
+
+      Sequencers_Window : constant access Scrolling_Container :=
+        Scrolling
+          (X               => 0.0,
+           Y               => 50.0,
+           Width           => Float (Mon_W),
+           Height          => Float (Mon_H) - 50.0,
+           Internal_Widget => Sequencers_Group,
+           Margin          => 5.0);
    begin
-      Play_Stop := Create_Play_Stop (Float (Mon_W) / 2.0, 0.0);
+      Play_Stop := Create_Play_Stop (Float (Mon_W), 50.0);
       W.Widgets.Append (Play_Stop);
       W.Widgets.Append (Base_Widget (Main_Container));
-      Main_Container.Widgets.Append (Sequencers_Group);
---        W.Widgets.Append (Pots_Group (Generator_Access (Kick), 10.0, 365.0));
+      Main_Container.Widgets.Append (Sequencers_Window);
+--        Main_Container.Widgets.Append
+--          (Piano_Roll
+--             (0.0, 50.0, Float (Mon_W), Float (Mon_H) - 50.0, Synth_Seq));
    end;
 
    --  Start sound output

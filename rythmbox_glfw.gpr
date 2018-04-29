@@ -13,10 +13,10 @@ project Rythmbox_Glfw is
       case Build is
          when "Debug" =>
             for Default_Switches ("Ada") use
-              ("-O0", "-g", "-gnatwaCJ", "-gnatygO");
+              ("-O0", "-g", "-gnatwaCJ", "-gnatydISux", "-gnatD");
          when "Release" =>
             for Default_Switches ("Ada") use
-              ("-O3", "-g", "-gnatwaCJ", "-gnatygO", "-gnatp", "-gnatn");
+              ("-O3", "-g", "-gnatwaCJ", "-gnatydISux", "-gnatp", "-gnatn");
       end case;
    end Compiler;
 
